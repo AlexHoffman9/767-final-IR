@@ -22,6 +22,7 @@ class OffPolicyAgent():
     def __init__(self, n_actions, n_replay, input_dim, out_dim, env, lr, discount):
         self.replay_buffer = [0]*n_replay # change to data structure that stores s,a,r,s'
         # self.model = self.build_model()
+        # TODO: Number of actions can be taken directly from env
         self.actions = range(n_actions)
         self.lr = lr
         self.discount = discount
@@ -51,7 +52,7 @@ class OffPolicyAgent():
         done = False
         while not done:
             # choose action according to policy
-            a = np.random,choice(a=self.actions, p=self.policy(s))
+            a = np.random.choice(a=self.actions, p=self.policy(s))
             (s2,r,done,_) = env.step(a)
             # compute the desired state value = r + v(s2)
             #TODO: figure out what goes in the buffer, put it there

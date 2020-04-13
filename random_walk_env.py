@@ -6,9 +6,11 @@ import numpy as np
 class RandomWalkEnv(gym.Env):
   metadata = {'render.modes': ['human']}
 
+  # size = number of states
+    # ex: size=10, there are states 0-9, going left at state 0 terminates with r=0, right at state 9 terminates with r=1
   def __init__(self, size):
     self.action_space = spaces.Discrete(2)
-    self.size = size
+    self.size = size # number of valid states
     #print("init")
   def step(self, action):
     #print("step")
@@ -21,13 +23,13 @@ class RandomWalkEnv(gym.Env):
     if (self.state >= self.size):
         reward = 1
         done = True
-    if (self.state <= 0):
+    if (self.state < 0):
         done = True
     return np.array(self.state), reward, done, {}
   def reset(self):
     #print("reset")
     # print("#self.size:",self.size)
-    self.state =  np.random.randint(1,self.size-1)
+    self.state =  np.random.randint(0,self.size-1)
     return self.state
     # print("starting: ", self.state)
 #   def render(self, mode='human', close=False):

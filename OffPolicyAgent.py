@@ -83,6 +83,7 @@ class OffPolicyAgent():
         for i in range(n_samples):
             # if experience ends in terminal state, value function returns 0
             if self.replay_buffer['s2'][sample_indices[i]] == -1 or self.replay_buffer['s2'][sample_indices[i]] == 10: #TODO this only works for randomwalk of size 10
+
                 next_values[i] = 0.0
         # targets = (rewards + self.discount*next_values)*ratios # this was wrong. the weight update is multiplied by the sampling ratio, not the target
         targets = (rewards + self.discount*next_values)

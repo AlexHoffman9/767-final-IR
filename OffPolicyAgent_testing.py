@@ -1,5 +1,7 @@
-import OffPolicyAgent
-import RandomWalkEnv from random_walk_env
+from OffPolicyAgent import OffPolicyAgent
+from random_walk_env import RandomWalkEnv
+import numpy as np
+import gym
 # testing
 env = RandomWalkEnv(10)
 lr=.001

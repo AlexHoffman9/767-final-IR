@@ -62,7 +62,7 @@ class OffPolicyAgent():
         while not done:
             # choose action according to policy
             a = np.random.choice(a=self.actions, p=self.behavior_policy[s])
-            (s2,r,done,_) = env.step(a)
+            (s2,r,done,_) = self.env.step(a)
             ratio = self.target_policy[s,a] / self.behavior_policy[s,a]
             self.replay_buffer[self.t%self.n_replay] = (s,s2,r,ratio)
             s=s2

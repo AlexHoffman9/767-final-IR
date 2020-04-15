@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from random_walk_env import RandomWalkEnv
 import time
 
+tf.compat.v1.disable_eager_execution()
 
 # Agent class with defaults for importance sampling
 # can write new classes for WIS, IR, etc. by overwriting key functions
@@ -46,11 +47,11 @@ class OffPolicyAgent():
         # loss function for batch update
         # just MSE loss multiplied by importance sampling ratio
         def is_loss(y_true, y_pred):
-            se = tf.math.squared(y_true-y_pred) * ratios # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
+            se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
             return tf.math.reduce_mean(se)
         # opt = Adam(lr=self.lr, beta_1=0.9, beta_2=0.999, amsgrad=True)
         model = Model(inputs=[input_layer, ratios], outputs=[output_layer])
-        model.compile(loss="mean_squared_error", optimizer = SGD(lr=self.lr))
+        model.compile(loss=is_loss, optimizer = SGD(lr=self.lr))
         return model
 
     # complete episode of experience and then train using buffer
@@ -78,7 +79,7 @@ class OffPolicyAgent():
         next_state_features = self.construct_features(self.replay_buffer['s2'][sample_indices])
         state_features = self.construct_features(self.replay_buffer['s'][sample_indices])
         ratios = self.replay_buffer['ratio'][sample_indices]
-        next_values = self.model.predict(next_state_features).flatten()
+        next_values = self.model.predict([next_state_features, np.zeros(next_state_features.shape[0])]).flatten()
         # v(s') is zero for terminal state, so need to fix model prediction
         for i in range(n_samples):
             # if experience ends in terminal state, value function returns 0

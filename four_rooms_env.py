@@ -22,6 +22,8 @@ class FourRoomsEnv():
     def __init__(self):
         self.rooms = self.build_rooms()
         self.reset()
+        self.size = (11,11)
+        self.nA = 4
 
     # action = 0,1,2,3 -> up,right,down,left
     def step(self, action):
@@ -36,14 +38,13 @@ class FourRoomsEnv():
             s2[1] -= 1
         s2 = np.clip(s2,0,10)       # agent hit outer wall, Ouch! cancel movement
         if self.rooms[s2[0],s2[1]]: # agent hit inner wall, Ouch!
-            s2 = self.state         # cancel movement
+            s2[:] = self.state[:]         # cancel movement
         r = 0
         done = False
-        # print("states", s2,self.state)
-        if (s2 == self.state).all(): # if agent hit wall it was to be reset to previous position (via np.clip or previous if condition)
+        if ((s2[0] == self.state[0]) and (s2[1] == self.state[1])): # if agent hit wall it was to be reset to previous position (via np.clip or previous if condition)
             r += 1
             done = True
-        self.state = s2
+        self.state = s2[:]
         return (s2,r,done,None)
 
     def reset(self):

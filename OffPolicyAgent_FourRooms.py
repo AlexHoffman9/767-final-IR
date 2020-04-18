@@ -28,7 +28,7 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
         self.n_replay = n_replay
         self.env = env
         self.actions = range(4)
-        self.n_features = 11 #TODO depends on tiling for states in fourroomsu. consult julia code. This needs to be input shape for the 2d tiled input
+        self.n_features = 11
         self.model = self.build_model(self.n_features*2, 1)
         print(self.model.summary())
         self.target_policy = target_policy # 2d array indexed by state, action
@@ -41,8 +41,9 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
     def build_model(self, input_dim, out_dim):
         input_layer = Input(shape=(input_dim), name='state_input')
         ratios = Input(shape=(1), name='importance_ratios')
-        # hidden_layer = Dense(32, activation = "relu", name='hidden_layer')(input_layer)
-        output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer) #(hidden_layer)
+        hidden_layer = Dense(32, activation = "relu", name='hidden_layer')(input_layer)
+        output_layer = Dense(out_dim, activation="linear", name='output_layer')(hidden_layer)
+        # output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer) #(hidden_layer)
         # loss function for batch update
         # just MSE loss multiplied by importance sampling ratio
         def is_loss(y_true, y_pred):
@@ -53,14 +54,13 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
         model.compile(loss=is_loss, optimizer = SGD(lr=self.lr))
         return model
 
-    # complete episode of experience and then train using buffer
-    # not sure how much experience to get before training on it...one episode? 2? n timesteps?
-    # shouldn't change with 4 rooms
-    def generate_episode(self):
+    # instead of generating one episode of experience, take 16 steps of experience
+    def generate_episode(self, k=16):
         # init state
         s = self.env.reset()
         done = False
-        while not done:
+        steps = 0 # counting to k steps
+        while steps < k:
             # choose action according to policy
             a = np.random.choice(a=self.actions, p=self.behavior_policy[s[0],s[1]])
             (s2,r,done,_) = self.env.step(a)
@@ -68,6 +68,10 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
             self.replay_buffer[self.t%self.n_replay] = (s,s2,r,ratio)
             s=s2
             self.t += 1
+            steps += 1
+            if done:
+                s = self.env.reset()
+                done = False
 
     # do batch of training using replay buffer
     # Default is to do a minibatch update. The paper uses both minibatch and incremental updates, so this could be changed

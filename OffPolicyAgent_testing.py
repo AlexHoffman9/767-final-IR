@@ -2,6 +2,7 @@ from OffPolicyAgent import OffPolicyAgent
 from random_walk_env import RandomWalkEnv
 import numpy as np
 import gym
+from IRAgent import IRAgent
 
 # testing
 env = RandomWalkEnv(10)
@@ -14,7 +15,7 @@ target=np.zeros(shape=(10,2), dtype=np.float)
 for i in range(10):
     target[i,1] = 1.0
 
-agent = OffPolicyAgent('RandomWalk', 256, env, target, uniform_random_behavior, lr, discount)
+agent = IRAgent('RandomWalk', 256, env, target, uniform_random_behavior, lr, discount, batch_corr = True)
 # print out initial value function
 states = agent.construct_features(range(10))
 print(agent.model.predict([states, np.array([0.]*10)]))

@@ -4,7 +4,7 @@ import tensorflow as tf
 from tensorflow.keras.optimizers import Adam,SGD
 from tensorflow.keras.layers import Dense, Input, Activation
 from tensorflow.keras.models import Model
-from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.callbacks import EarlyStopping, TerminateOnNaN
 import tensorflow.keras.backend as K
 import matplotlib.pyplot as plt
 from random_walk_env import RandomWalkEnv
@@ -51,9 +51,10 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
             se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
             return tf.math.reduce_mean(se)
         def wis_minibatch_loss(y_true,y_pred):
-            ratio_sum = tf.reduce_sum(ratios)
+            ratio_sum = tf.reduce_sum(ratios)+.00000001
             se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
-            return tf.math.reduce_sum(se)/ratio_sum
+            loss = tf.math.reduce_sum(se)/ratio_sum
+            return loss
         def wis_buffer_loss(y_true,y_pred):
             buffer_entries = np.min(self.t,self.n_replay)
             ratio_sum = np.sum(self.replay_buffer['ratio'][0:buffer_entries]) # only sum entries in buffer up to current size of buffer
@@ -105,7 +106,7 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
             if (self.replay_buffer['s'][sample_indices[i]] ==  self.replay_buffer['s2'][sample_indices[i]]).all():
                 next_values[i] = 0.0
         targets = (rewards + self.discount*next_values)
-        self.model.fit([state_features, ratios], targets, batch_size=batch_size, verbose=0)
+        return self.model.fit([state_features, ratios], targets, batch_size=batch_size, verbose=0) #, callbacks=[TerminateOnNaN()])
 
     # need to choose tiling (will depend on child class for each environment
     # default tiling is for 10 state random walk

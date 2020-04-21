@@ -51,7 +51,7 @@ class OffPolicyAgent():
             se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
             return tf.math.reduce_mean(se)
         def wis_minibatch_loss(y_true,y_pred):
-            ratio_sum = tf.reduce_sum(ratios)
+            ratio_sum = tf.reduce_sum(ratios)+.00000001
             se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
             return tf.math.reduce_sum(se)/ratio_sum
         # not sure how to get sum of entire buffer into loss function because it is stored in class

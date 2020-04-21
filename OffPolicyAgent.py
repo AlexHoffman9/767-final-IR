@@ -17,11 +17,12 @@ tf.compat.v1.disable_eager_execution()
 # Compatible with problem_name='RandomWalk' or 'FourRooms'
 class OffPolicyAgent():
     # construct agent's model separately, so it can be sized according to problem
-    def __init__(self, problem_name, n_replay, env, target_policy, behavior_policy, lr, discount):
+    def __init__(self, problem_name, n_replay, env, target_policy, behavior_policy, lr, discount, IS_method='IS'):
         self.lr = lr
         self.discount = discount
         self.n_replay = n_replay
         self.env = env
+        self.t=0
         if problem_name == 'RandomWalk':
             self.actions = range(2)
             self.n_features = 10  # fixed for 10 state randomwalk. just using sparse coding
@@ -30,16 +31,16 @@ class OffPolicyAgent():
             self.n_features = 10 #TODO depends on tiling for states in fourroomsu. consult julia code. This needs to be input shape for the 2d tiled input
         else:
             print('ERRORRR: invalid problem name')
-        self.model = self.build_model(self.n_features, 1)
+        self.model = self.build_model(self.n_features, 1, IS_method)
         # print(self.model.summary())
         self.target_policy = target_policy # 2d array indexed by state, action. example: 10x2 array for 10 state random walk
         self.behavior_policy = behavior_policy
         self.replay_buffer = np.zeros(shape=(n_replay), dtype=[('s',np.int32), ('s2',np.int32), ('r',np.int32), ('ratio', np.float)]) # state, next state, reward, ratio
-        self.t=0
+        self.name = IS_method
 
     # build neural network for state value function
     # Default is single layer linear layer
-    def build_model(self, input_dim, out_dim):
+    def build_model(self, input_dim, out_dim, IS_method='IS'):
         input_layer = Input(shape=(input_dim), name='state_input')
         ratios = Input(shape=(1), name='importance_ratios')
         # hidden_layer = Dense(32, activation = "relu", name='hidden_layer')(input_layer)
@@ -49,18 +50,35 @@ class OffPolicyAgent():
         def is_loss(y_true, y_pred):
             se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
             return tf.math.reduce_mean(se)
+        def wis_minibatch_loss(y_true,y_pred):
+            ratio_sum = tf.reduce_sum(ratios)
+            se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
+            return tf.math.reduce_sum(se)/ratio_sum
+        # not sure how to get sum of entire buffer into loss function because it is stored in class
+        # def wis_buffer_loss(y_true,y_pred):
+        #     buffer_entries = np.min(self.t,self.n_replay)
+        #     ratio_sum = np.sum(self.replay_buffer['ratio'][0:buffer_entries]) # only sum entries in buffer up to current size of buffer
+        #     k = len(ratios)
+        #     se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
+        #     return buffer_entries*tf.math.reduce_sum(se)/(ratio_sum*k) # n/k * (sum errors / sum ratios) 
         # opt = Adam(lr=self.lr, beta_1=0.9, beta_2=0.999, amsgrad=True)
         model = Model(inputs=[input_layer, ratios], outputs=[output_layer])
-        model.compile(loss=is_loss, optimizer = SGD(lr=self.lr))
+        if IS_method == 'IS':
+            model.compile(loss=is_loss, optimizer = SGD(lr=self.lr))
+        elif IS_method == 'WIS_minibatch':
+            model.compile(loss=wis_minibatch_loss, optimizer = SGD(lr=self.lr))
+        # elif IS_method == 'WIS_buffer':
+        #     model.compile(loss=wis_buffer_loss, optimizer = SGD(lr=self.lr))
         return model
 
     # complete episode of experience and then train using buffer
     # not sure how much experience to get before training on it...one episode? 2? n timesteps?
-    def generate_episode(self):
+    def generate_episode(self, k=16):
         # init state
         s = self.env.reset()
         done = False
-        while not done:
+        steps = 0
+        while steps < k:
             # choose action according to policy
             a = np.random.choice(a=self.actions, p=self.behavior_policy[s])
             (s2,r,done,_) = self.env.step(a)
@@ -68,6 +86,10 @@ class OffPolicyAgent():
             self.replay_buffer[self.t%self.n_replay] = (s,s2,r,ratio)
             s=s2
             self.t += 1
+            steps += 1
+            if done:
+                done = False
+                s = self.env.reset()
 
     # do batch of training using replay buffer
     # Default is to do a minibatch update. The paper uses both minibatch and incremental updates, so this could be changed
@@ -84,20 +106,9 @@ class OffPolicyAgent():
         for i in range(n_samples):
             # if experience ends in terminal state, value function returns 0
             if self.replay_buffer['s2'][sample_indices[i]] == -1 or self.replay_buffer['s2'][sample_indices[i]] == 10: #TODO this only works for randomwalk of size 10
-
                 next_values[i] = 0.0
         # targets = (rewards + self.discount*next_values)*ratios # this was wrong. the weight update is multiplied by the sampling ratio, not the target
         targets = (rewards + self.discount*next_values)
-        # testing the targets for the last state because its value is off
-        # for i in range(n_samples):
-        #     if self.replay_buffer['s'][sample_indices[i]] == 9:
-        #         print(targets[i])
-        # print("state features:", state_features)
-        # print('rewards:', rewards)
-        # print("ratios", ratios)
-        # print('next values:', next_values)
-        # print('targets',targets)
-        # train on samples
         self.model.fit([state_features, ratios], targets, batch_size=batch_size, verbose=0)
 
     # choose batch of experience from buffer. IR will change this function
@@ -114,6 +125,12 @@ class OffPolicyAgent():
     def construct_features(self,states):
         # print(states)
         return np.array([[np.float(i == s) for i in range(self.n_features)] for s in states])
+
+    def value_function(self):
+        states = self.construct_features(range(10))
+        values = self.model.predict([states, np.array([0.]*10)])
+        return values
+
 
 
 

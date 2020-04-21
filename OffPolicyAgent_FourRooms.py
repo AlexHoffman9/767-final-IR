@@ -22,23 +22,24 @@ tf.compat.v1.disable_eager_execution()
 # Compatible with problem_name='RandomWalk' or 'FourRooms'
 class OffPolicyAgent_FourRooms(OffPolicyAgent):
     # construct agent's model separately, so it can be sized according to problem
-    def __init__(self, problem_name, n_replay, env, target_policy, behavior_policy, lr, discount):
+    def __init__(self, problem_name, n_replay, env, target_policy, behavior_policy, lr, discount, IS_method='IS'):
         self.lr = lr
         self.discount = discount
         self.n_replay = n_replay
         self.env = env
         self.actions = range(4)
         self.n_features = 11
-        self.model = self.build_model(self.n_features*2, 1)
+        self.model = self.build_model(self.n_features*2, 1, IS_method)
         print(self.model.summary())
         self.target_policy = target_policy # 2d array indexed by state, action
         self.behavior_policy = behavior_policy
         self.replay_buffer = np.zeros(shape=(n_replay), dtype=[('s',(np.int32,2)), ('s2',(np.int32,2)), ('r',np.int32), ('ratio', np.float)]) # state, next state, reward, ratio
         self.t=0
+        self.name = IS_method
 
     # build neural network for state value function
     # Default is single layer linear layer
-    def build_model(self, input_dim, out_dim):
+    def build_model(self, input_dim, out_dim, IS_method):
         input_layer = Input(shape=(input_dim), name='state_input')
         ratios = Input(shape=(1), name='importance_ratios')
         hidden_layer = Dense(32, activation = "relu", name='hidden_layer')(input_layer)
@@ -49,9 +50,24 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
         def is_loss(y_true, y_pred):
             se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
             return tf.math.reduce_mean(se)
+        def wis_minibatch_loss(y_true,y_pred):
+            ratio_sum = tf.reduce_sum(ratios)
+            se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
+            return tf.math.reduce_sum(se)/ratio_sum
+        def wis_buffer_loss(y_true,y_pred):
+            buffer_entries = np.min(self.t,self.n_replay)
+            ratio_sum = np.sum(self.replay_buffer['ratio'][0:buffer_entries]) # only sum entries in buffer up to current size of buffer
+            k = len(ratios)
+            se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
+            return buffer_entries*tf.math.reduce_sum(se)/(ratio_sum*k) # n/k * (sum errors / sum ratios) 
         # opt = Adam(lr=self.lr, beta_1=0.9, beta_2=0.999, amsgrad=True)
         model = Model(inputs=[input_layer, ratios], outputs=[output_layer])
-        model.compile(loss=is_loss, optimizer = SGD(lr=self.lr))
+        if IS_method == 'IS':
+            model.compile(loss=is_loss, optimizer = SGD(lr=self.lr))
+        elif IS_method == 'WIS_minibatch':
+            model.compile(loss=wis_minibatch_loss, optimizer = SGD(lr=self.lr))
+        elif IS_method == 'WIS_buffer':
+            model.compile(loss=wis_buffer_loss, optimizer = SGD(lr=self.lr))
         return model
 
     # instead of generating one episode of experience, take 16 steps of experience
@@ -88,20 +104,8 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
             # if experience ends in terminal state then s==s2
             if (self.replay_buffer['s'][sample_indices[i]] ==  self.replay_buffer['s2'][sample_indices[i]]).all():
                 next_values[i] = 0.0
-        # targets = (rewards + self.discount*next_values)*ratios # this was wrong. the weight update is multiplied by the sampling ratio, not the target
         targets = (rewards + self.discount*next_values)
-        # testing the targets for the last state because its value is off
-        # for i in range(n_samples):
-        #     if self.replay_buffer['s'][sample_indices[i]] == 9:
-        #         print(targets[i])
-        # print("state features:", state_features)
-        # print('rewards:', rewards)
-        # print("ratios", ratios)
-        # print('next values:', next_values)
-        # print('targets',targets)
-        # train on samples
         self.model.fit([state_features, ratios], targets, batch_size=batch_size, verbose=0)
-        # print("done fit")
 
     # need to choose tiling (will depend on child class for each environment
     # default tiling is for 10 state random walk
@@ -112,4 +116,12 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
         # flattens encoding into a 1D vector: [[00010000100000]]
         return np.array([[np.float(i == s[0]) for i in range(11)] + [np.float(i == s[1]) for i in range(11)] for s in states])
 
+    def value_function(self):
+        test_states = [[i,j] for i in range(11) for j in range(11)]
+        test_features = self.construct_features(test_states)
+        values = np.reshape(self.model.predict([test_features, np.array([0.]*121)]), (11,11))
+        values = values*np.array(np.invert(self.env.rooms), dtype=float) # zero the walls
+        return values
 
+    
+        

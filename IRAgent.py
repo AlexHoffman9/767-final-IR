@@ -37,6 +37,7 @@ class IRAgent():
         # print(self.model.summary())
         self.target_policy = target_policy # 2d array indexed by state, action. example: 10x2 array for 10 state random walk
         self.behavior_policy = behavior_policy
+        self.name = 'IR'
 
         # IR Replay buffer
         self.replay_buffer = Memory(n_replay)
@@ -62,11 +63,12 @@ class IRAgent():
 
     # complete episode of experience and then train using buffer
     # not sure how much experience to get before training on it...one episode? 2? n timesteps?
-    def generate_episode(self):
+    def generate_episode(self, k=16):
         # init state
         s = self.env.reset()
         done = False
-        while not done:
+        steps = 0
+        while steps < k:
             # choose action according to policy
             a = np.random.choice(a=self.actions, p=self.behavior_policy[s])
             (s2,r,done,_) = self.env.step(a)
@@ -77,6 +79,10 @@ class IRAgent():
             #self.replay_buffer[self.t%self.n_replay] = (s,s2,r,ratio)
             s=s2
             self.t += 1
+            steps += 1
+            if done:
+                done = False
+                s = self.env.reset()
 
     # do batch of training using replay buffer
     # Default is to do a minibatch update. The paper uses both minibatch and incremental updates, so this could be changed
@@ -144,3 +150,8 @@ class IRAgent():
     def construct_features(self,states):
         # print(states)
         return np.array([[np.float(i == s) for i in range(self.n_features)] for s in states])
+
+    def value_function(self):
+        states = self.construct_features(range(10))
+        values = self.model.predict([states, np.array([0.]*10)])
+        return values

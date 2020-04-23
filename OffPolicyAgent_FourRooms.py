@@ -29,7 +29,7 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
         self.env = env
         self.actions = range(4)
         self.n_features = 11
-        self.model = self.build_model(self.n_features*2, 1, IS_method)
+        self.build_model(self.n_features*2, 1, IS_method)
         print(self.model.summary())
         self.target_policy = target_policy # 2d array indexed by state, action
         self.behavior_policy = behavior_policy
@@ -37,14 +37,7 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
         self.t=0
         self.name = IS_method
 
-    # build neural network for state value function
-    # Default is single layer linear layer
-    def build_model(self, input_dim, out_dim, IS_method):
-        input_layer = Input(shape=(input_dim), name='state_input')
-        ratios = Input(shape=(1), name='importance_ratios')
-        hidden_layer = Dense(32, activation = "relu", name='hidden_layer')(input_layer)
-        output_layer = Dense(out_dim, activation="linear", name='output_layer')(hidden_layer)
-        # output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer) #(hidden_layer)
+    def model_compile(self, ratios, IS_method):
         # loss function for batch update
         # just MSE loss multiplied by importance sampling ratio
         def is_loss(y_true, y_pred):
@@ -60,16 +53,34 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
             ratio_sum = np.sum(self.replay_buffer['ratio'][0:buffer_entries]) # only sum entries in buffer up to current size of buffer
             k = len(ratios)
             se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
-            return buffer_entries*tf.math.reduce_sum(se)/(ratio_sum*k) # n/k * (sum errors / sum ratios) 
-        # opt = Adam(lr=self.lr, beta_1=0.9, beta_2=0.999, amsgrad=True)
-        model = Model(inputs=[input_layer, ratios], outputs=[output_layer])
+            return buffer_entries*tf.math.reduce_sum(se)/(ratio_sum*k) # n/k * (sum errors / sum ratios)
+
+        # Loss function
         if IS_method == 'IS':
-            model.compile(loss=is_loss, optimizer = SGD(lr=self.lr))
+            loss_func = is_loss
         elif IS_method == 'WIS_minibatch':
-            model.compile(loss=wis_minibatch_loss, optimizer = SGD(lr=self.lr))
+            loss_func = wis_minibatch_loss
         elif IS_method == 'WIS_buffer':
-            model.compile(loss=wis_buffer_loss, optimizer = SGD(lr=self.lr))
-        return model
+            loss_func = wis_buffer_loss
+        else:
+            # Default is currently IS Loss
+            loss_func = is_loss
+
+        # Compile current model
+        self.model.compile(loss=loss_func, optimizer = SGD(lr=self.lr))
+
+    # build neural network for state value function
+    # Default is single layer linear layer
+    def build_model(self, input_dim, out_dim, IS_method):
+        input_layer = Input(shape=(input_dim), name='state_input')
+        ratios = Input(shape=(1), name='importance_ratios')
+        hidden_layer = Dense(32, activation = "relu", name='hidden_layer')(input_layer)
+        output_layer = Dense(out_dim, activation="linear", name='output_layer')(hidden_layer)
+        # output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer) #(hidden_layer)
+        # opt = Adam(lr=self.lr, beta_1=0.9, beta_2=0.999, amsgrad=True)
+        self.model = Model(inputs=[input_layer, ratios], outputs=[output_layer])
+
+        self.model_compile(ratios, IS_method)
 
     # instead of generating one episode of experience, take 16 steps of experience
     def generate_episode(self, k=16):
@@ -123,6 +134,3 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
         values = np.reshape(self.model.predict([test_features, np.array([0.]*121)]), (11,11))
         values = values*np.array(np.invert(self.env.rooms), dtype=float) # zero the walls
         return values
-
-    
-        

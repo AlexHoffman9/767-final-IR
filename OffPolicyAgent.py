@@ -38,13 +38,7 @@ class OffPolicyAgent():
         self.replay_buffer = np.zeros(shape=(n_replay), dtype=[('s',np.int32), ('s2',np.int32), ('r',np.int32), ('ratio', np.float)]) # state, next state, reward, ratio
         self.name = IS_method
 
-    # build neural network for state value function
-    # Default is single layer linear layer
-    def build_model(self, input_dim, out_dim, IS_method='IS'):
-        input_layer = Input(shape=(input_dim), name='state_input')
-        ratios = Input(shape=(1), name='importance_ratios')
-        # hidden_layer = Dense(32, activation = "relu", name='hidden_layer')(input_layer)
-        output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer) #(hidden_layer)
+    def model_compile(self, model, ratios, IS_method):
         # loss function for batch update
         # just MSE loss multiplied by importance sampling ratio
         def is_loss(y_true, y_pred):
@@ -54,19 +48,37 @@ class OffPolicyAgent():
             ratio_sum = tf.reduce_sum(ratios)+.00000001
             se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
             return tf.math.reduce_sum(se)/ratio_sum
+
+        if IS_method == "IS":
+            loss_func = is_loss
+        elif IS_method == "WIS_minibatch":
+            loss_func = wis_minibatch_loss
+        else:
+            # Returns IS loss by default
+            loss_func = is_loss
+
+        model.compile(loss = loss_func, optimizer = SGD(lr=self.lr))
+
+
+    # build neural network for state value function
+    # Default is single layer linear layer
+    def build_model(self, input_dim, out_dim, IS_method='IS'):
+        input_layer = Input(shape=(input_dim), name='state_input')
+        ratios = Input(shape=(1), name='importance_ratios')
+        # hidden_layer = Dense(32, activation = "relu", name='hidden_layer')(input_layer)
+        output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer) #(hidden_layer)
+
         # not sure how to get sum of entire buffer into loss function because it is stored in class
         # def wis_buffer_loss(y_true,y_pred):
         #     buffer_entries = np.min(self.t,self.n_replay)
         #     ratio_sum = np.sum(self.replay_buffer['ratio'][0:buffer_entries]) # only sum entries in buffer up to current size of buffer
         #     k = len(ratios)
         #     se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
-        #     return buffer_entries*tf.math.reduce_sum(se)/(ratio_sum*k) # n/k * (sum errors / sum ratios) 
+        #     return buffer_entries*tf.math.reduce_sum(se)/(ratio_sum*k) # n/k * (sum errors / sum ratios)
         # opt = Adam(lr=self.lr, beta_1=0.9, beta_2=0.999, amsgrad=True)
         model = Model(inputs=[input_layer, ratios], outputs=[output_layer])
-        if IS_method == 'IS':
-            model.compile(loss=is_loss, optimizer = SGD(lr=self.lr))
-        elif IS_method == 'WIS_minibatch':
-            model.compile(loss=wis_minibatch_loss, optimizer = SGD(lr=self.lr))
+
+        self.model_compile(model, ratios, IS_method)
         # elif IS_method == 'WIS_buffer':
         #     model.compile(loss=wis_buffer_loss, optimizer = SGD(lr=self.lr))
         return model
@@ -130,7 +142,3 @@ class OffPolicyAgent():
         states = self.construct_features(range(10))
         values = self.model.predict([states, np.array([0.]*10)])
         return values
-
-
-
-

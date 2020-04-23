@@ -6,6 +6,8 @@ from IRAgent import IRAgent
 from OffPolicyAgent_FourRooms import OffPolicyAgent_FourRooms
 from four_rooms_env import FourRoomsEnv
 import matplotlib.pyplot as plt
+from IRAgent_FourRooms import IRAgent_FourRooms
+
 
 def dynamic_programming_FourRooms(env, discount, target_policy, thresh=.001):
     # init values to 0
@@ -33,7 +35,7 @@ def dynamic_programming_FourRooms(env, discount, target_policy, thresh=.001):
 
 # test agent
 lr=.01
-discount=.5
+discount=.9
 
 # Random walk policies and true value function
 env_walk = RandomWalkEnv(10)
@@ -42,7 +44,7 @@ target_policy=np.zeros(shape=(10,2), dtype=np.float)
 for i in range(10):
     target_policy[i,1] = 1.0 # deterministic to right
 true_value_walk = [discount**i for i in reversed(range(10))]
-ir_agent_walk = IRAgent('RandomWalk', 256, env_walk, target_policy, uniform_random_behavior, lr, discount)
+ir_agent_walk = IRAgent('RandomWalk', 256, env_walk, target_policy, uniform_random_behavior, lr, discount, 'BC')
 is_agent_walk = OffPolicyAgent('RandomWalk', 256, env_walk, target_policy, uniform_random_behavior, lr, discount)
 wis_minibatch_agent_walk = OffPolicyAgent('RandomWalk', 256, env_walk, target_policy, uniform_random_behavior, lr, discount, 'WIS_minibatch')
 
@@ -54,10 +56,13 @@ target_policy[:,:,2] = 1.0 # deterministically choose down
 true_value_rooms = dynamic_programming_FourRooms(env_rooms, discount, target_policy, .000001).flatten()
 is_agent_rooms = OffPolicyAgent_FourRooms('FourRooms', 2500, env_rooms, target_policy, uniform_random_behavior, lr, discount)
 wis_minibatch_agent_rooms = OffPolicyAgent_FourRooms('FourRooms', 2500, env_rooms, target_policy, uniform_random_behavior, lr, discount, 'WIS_minibatch')
+ir_agent_rooms = IRAgent_FourRooms('FourRooms', 2500, env_rooms, target_policy, uniform_random_behavior, lr, discount, "BC")
+
 
 # choose agent
-true_value = true_value_walk
-agents = [is_agent_walk, wis_minibatch_agent_walk, ir_agent_walk]
+true_value = true_value_rooms
+#agents = [is_agent_walk, wis_minibatch_agent_walk, ir_agent_walk]
+agents = [is_agent_rooms, wis_minibatch_agent_rooms, ir_agent_rooms]
 
 n_updates = 500
 n_runs = 1 # cannot increase until we have reset function implemented for agents

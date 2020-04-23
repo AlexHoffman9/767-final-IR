@@ -3,6 +3,7 @@ from random_walk_env import RandomWalkEnv
 import numpy as np
 import gym
 from four_rooms_env import FourRoomsEnv
+from IRAgent_FourRooms import IRAgent_FourRooms
 
 # function DynamicProgramming(env::FourRooms, gvf::GVF, thresh=1e-20)
 #     v = zeros(size(env))
@@ -49,8 +50,8 @@ def dynamic_programming(env, discount, target_policy, thresh=.001):
             v[s[0],s[1]] = vnew
         itrs += 1
     return v
-    
-        
+
+
 
 
 # Test four rooms environment
@@ -71,7 +72,8 @@ v_true = dynamic_programming(env, 0.5, target, .000001)
 # print(v_true)
 test_states = [[i,j] for i in range(11) for j in range(11)]
 
-agent = OffPolicyAgent_FourRooms('FourRooms', 2500, env, target, uniform_random_behavior, lr, discount)
+# agent = OffPolicyAgent_FourRooms('FourRooms', 2500, env, target, uniform_random_behavior, lr, discount, "WIS_minibatch")
+agent = IRAgent_FourRooms('FourRooms', 2500, env, target, uniform_random_behavior, lr, discount, "BC")
 # convert coordinates to one hot encoding
 test_features = agent.construct_features(test_states)
 prediction = np.reshape(agent.model.predict([test_features, np.array([0.]*121)]), (11,11))

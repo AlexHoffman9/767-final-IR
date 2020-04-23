@@ -17,26 +17,26 @@ tf.compat.v1.disable_eager_execution()
 # Compatible with problem_name='RandomWalk' or 'FourRooms'
 class OffPolicyAgent():
     # construct agent's model separately, so it can be sized according to problem
-    def __init__(self, problem_name, n_replay, env, target_policy, behavior_policy, lr, discount, IS_method='IS'):
+    def __init__(self, n_replay, env, target_policy, behavior_policy, lr, discount, IS_method='IS'):
         self.lr = lr
         self.discount = discount
         self.n_replay = n_replay
         self.env = env
         self.t=0
-        if problem_name == 'RandomWalk':
-            self.actions = range(2)
-            self.n_features = 10  # fixed for 10 state randomwalk. just using sparse coding
-        elif problem_name == 'FourRooms':
-            self.actions = range(4)
-            self.n_features = 10 #TODO depends on tiling for states in fourroomsu. consult julia code. This needs to be input shape for the 2d tiled input
-        else:
-            print('ERRORRR: invalid problem name')
+        self.actions = range(2)
+        self.n_features = 10  # fixed for 10 state randomwalk. just using sparse coding
         self.model = self.build_model(self.n_features, 1, IS_method)
-        # print(self.model.summary())
         self.target_policy = target_policy # 2d array indexed by state, action. example: 10x2 array for 10 state random walk
         self.behavior_policy = behavior_policy
         self.replay_buffer = np.zeros(shape=(n_replay), dtype=[('s',np.int32), ('s2',np.int32), ('r',np.int32), ('ratio', np.float)]) # state, next state, reward, ratio
         self.name = IS_method
+
+    # reseed numpy, reset weights of network
+    def reset(self,seed):
+        self.t=0
+        np.random.seed(seed)
+        self.replay_buffer = np.zeros(shape=(self.n_replay), dtype=[('s',np.int32), ('s2',np.int32), ('r',np.int32), ('ratio', np.float)]) # state, next state, reward, ratio
+        self.model = self.build_model(self.n_features,1,self.name)
 
     def model_compile(self, model, ratios, IS_method):
         # loss function for batch update
@@ -56,9 +56,7 @@ class OffPolicyAgent():
         else:
             # Returns IS loss by default
             loss_func = is_loss
-
         model.compile(loss = loss_func, optimizer = SGD(lr=self.lr))
-
 
     # build neural network for state value function
     # Default is single layer linear layer

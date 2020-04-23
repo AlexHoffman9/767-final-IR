@@ -22,20 +22,27 @@ tf.compat.v1.disable_eager_execution()
 # Compatible with problem_name='RandomWalk' or 'FourRooms'
 class OffPolicyAgent_FourRooms(OffPolicyAgent):
     # construct agent's model separately, so it can be sized according to problem
-    def __init__(self, problem_name, n_replay, env, target_policy, behavior_policy, lr, discount, IS_method='IS'):
+    def __init__(self, n_replay, env, target_policy, behavior_policy, lr, discount, IS_method='IS'):
         self.lr = lr
         self.discount = discount
         self.n_replay = n_replay
         self.env = env
+        self.t=0
+        self.target_policy = target_policy # 2d array indexed by state, action
+        self.behavior_policy = behavior_policy
         self.actions = range(4)
         self.n_features = 11
         self.build_model(self.n_features*2, 1, IS_method)
-        print(self.model.summary())
-        self.target_policy = target_policy # 2d array indexed by state, action
-        self.behavior_policy = behavior_policy
+        # print(self.model.summary())
         self.replay_buffer = np.zeros(shape=(n_replay), dtype=[('s',(np.int32,2)), ('s2',(np.int32,2)), ('r',np.int32), ('ratio', np.float)]) # state, next state, reward, ratio
-        self.t=0
         self.name = IS_method
+
+    # reseed numpy, reset weights of network
+    def reset(self,seed):
+        self.t=0
+        np.random.seed(seed)
+        self.replay_buffer = np.zeros(shape=(self.n_replay), dtype=[('s',(np.int32,2)), ('s2',(np.int32,2)), ('r',np.int32), ('ratio', np.float)]) # state, next state, reward, ratio
+        self.build_model(self.n_features*2, 1, self.name)
 
     def model_compile(self, ratios, IS_method):
         # loss function for batch update
@@ -127,6 +134,7 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
         # going to assume it is a one hot encoding of each coordinate, so [[0001000],[0100000]]
         # flattens encoding into a 1D vector: [[00010000100000]]
         return np.array([[np.float(i == s[0]) for i in range(11)] + [np.float(i == s[1]) for i in range(11)] for s in states])
+        # np.array([[np.float((i == s[0]) and (j == s[1])) for i in range(11) for j in range(11)] for s in states])
 
     def value_function(self):
         test_states = [[i,j] for i in range(11) for j in range(11)]

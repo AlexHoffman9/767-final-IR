@@ -20,10 +20,17 @@ tf.compat.v1.disable_eager_execution()
 # Compatible with problem_name='RandomWalk' or 'FourRooms'
 class IRAgent(OffPolicyAgent):
     # construct agent's model separately, so it can be sized according to problem
-    def __init__(self, problem_name, n_replay, env, target_policy, behavior_policy, lr, discount, IS_method = 'BC'):
-        super().__init__(problem_name, n_replay, env, target_policy, behavior_policy, lr, discount, IS_method)
+    def __init__(self, n_replay, env, target_policy, behavior_policy, lr, discount, IS_method = 'BC'):
+        super().__init__(n_replay, env, target_policy, behavior_policy, lr, discount, IS_method)
         # IR Replay buffer
         self.replay_buffer = Memory(n_replay)
+
+    # reseed numpy, reset weights of network
+    def reset(self,seed):
+        self.t=0
+        np.random.seed(seed)
+        self.replay_buffer = Memory(self.n_replay)
+        self.model = self.build_model(self.n_features,1,self.name)
 
     def model_compile(self, model, ratios, IS_method):
         # IR Agent model loss function

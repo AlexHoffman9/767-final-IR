@@ -32,7 +32,7 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
         self.behavior_policy = behavior_policy
         self.actions = range(4)
         self.n_features = 11
-        self.build_model(self.n_features*2, 1, IS_method)
+        self.build_model(121, 1, IS_method)
         # print(self.model.summary())
         self.replay_buffer = np.zeros(shape=(n_replay), dtype=[('s',(np.int32,2)), ('s2',(np.int32,2)), ('r',np.int32), ('ratio', np.float)]) # state, next state, reward, ratio
         self.name = IS_method
@@ -42,7 +42,7 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
         self.t=0
         np.random.seed(seed)
         self.replay_buffer = np.zeros(shape=(self.n_replay), dtype=[('s',(np.int32,2)), ('s2',(np.int32,2)), ('r',np.int32), ('ratio', np.float)]) # state, next state, reward, ratio
-        self.build_model(self.n_features*2, 1, self.name)
+        self.build_model(121, 1, self.name)
 
     def model_compile(self, ratios, IS_method):
         # loss function for batch update
@@ -81,9 +81,9 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
     def build_model(self, input_dim, out_dim, IS_method):
         input_layer = Input(shape=(input_dim), name='state_input')
         ratios = Input(shape=(1), name='importance_ratios')
-        hidden_layer = Dense(32, activation = "relu", name='hidden_layer')(input_layer)
-        output_layer = Dense(out_dim, activation="linear", name='output_layer')(hidden_layer)
-        # output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer) #(hidden_layer)
+        # hidden_layer = Dense(32, activation = "relu", name='hidden_layer')(input_layer)
+        # output_layer = Dense(out_dim, activation="linear", name='output_layer')(hidden_layer)
+        output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer) #(hidden_layer)
         # opt = Adam(lr=self.lr, beta_1=0.9, beta_2=0.999, amsgrad=True)
         self.model = Model(inputs=[input_layer, ratios], outputs=[output_layer])
 
@@ -133,8 +133,8 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
         # can't quite understand the many hot encoding of the julia code
         # going to assume it is a one hot encoding of each coordinate, so [[0001000],[0100000]]
         # flattens encoding into a 1D vector: [[00010000100000]]
-        return np.array([[np.float(i == s[0]) for i in range(11)] + [np.float(i == s[1]) for i in range(11)] for s in states])
-        # np.array([[np.float((i == s[0]) and (j == s[1])) for i in range(11) for j in range(11)] for s in states])
+        # return np.array([[np.float(i == s[0]) for i in range(11)] + [np.float(i == s[1]) for i in range(11)] for s in states])
+        return np.array([[np.float((i == s[0]) and (j == s[1])) for i in range(11) for j in range(11)] for s in states])
 
     def value_function(self):
         test_states = [[i,j] for i in range(11) for j in range(11)]
@@ -142,3 +142,14 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
         values = np.reshape(self.model.predict([test_features, np.array([0.]*121)]), (11,11))
         values = values*np.array(np.invert(self.env.rooms), dtype=float) # zero the walls
         return values
+
+
+# lr=.01
+# discount=.9    
+# env_rooms = FourRoomsEnv()
+# uniform_random_behavior=np.full(shape=(11,11,4), fill_value=0.25, dtype=np.float)
+# target_policy=np.zeros(shape=(11,11,4), dtype=np.float)
+# target_policy[:,:,2] = 1.0 # deterministically choose down
+# # true_value_rooms = dynamic_programming_FourRooms(env_rooms, discount, target_policy, .000001)
+# is_agent_rooms = OffPolicyAgent_FourRooms(2500, env_rooms, target_policy, uniform_random_behavior, lr, discount)
+# values = is_agent_rooms.value_function()

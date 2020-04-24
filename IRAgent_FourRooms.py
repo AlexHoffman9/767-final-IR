@@ -35,7 +35,7 @@ class IRAgent_FourRooms(OffPolicyAgent_FourRooms):
         self.t=0
         np.random.seed(seed)
         self.replay_buffer = Memory(self.n_replay)
-        self.build_model(self.n_features*2, 1, self.name)
+        self.build_model(121, 1, self.name)
 
     def model_compile(self, ratios, IS_method):
         # loss function for batch update

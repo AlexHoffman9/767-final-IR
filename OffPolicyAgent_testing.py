@@ -34,7 +34,7 @@ def dynamic_programming_FourRooms(env, discount, target_policy, thresh=.001):
 
 
 # test agent
-lr=.01
+lr=0.7
 discount=.9
 
 # Random walk policies and true value function
@@ -50,37 +50,43 @@ wis_minibatch_agent_walk = OffPolicyAgent(256, env_walk, target_policy, uniform_
 
 # Four Rooms params and agents
 env_rooms = FourRoomsEnv()
-uniform_random_behavior=np.full(shape=(11,11,4), fill_value=0.25, dtype=np.float)
+grid_size = 11
+uniform_random_behavior=np.full(shape=(grid_size,grid_size,4), fill_value=0.25, dtype=np.float)
+random_sel_states = np.random.choice(grid_size**2, 25)
+for random_sel_state in random_sel_states:
+    uniform_random_behavior[random_sel_state//grid_size, random_sel_state%grid_size,2] = 0.05
+    uniform_random_behavior[random_sel_state//grid_size, random_sel_state%grid_size, [0,1,3]] = 0.95/3
 target_policy=np.zeros(shape=(11,11,4), dtype=np.float)
 target_policy[:,:,2] = 1.0 # deterministically choose down
-true_value_rooms = dynamic_programming_FourRooms(env_rooms, discount, target_policy, .000001)
+true_value_rooms = dynamic_programming_FourRooms(env_rooms, discount, target_policy, .000000000001)
 is_agent_rooms = OffPolicyAgent_FourRooms(2500, env_rooms, target_policy, uniform_random_behavior, lr, discount)
 wis_minibatch_agent_rooms = OffPolicyAgent_FourRooms(2500, env_rooms, target_policy, uniform_random_behavior, lr, discount, 'WIS_minibatch')
-ir_agent_rooms = IRAgent_FourRooms(2500, env_rooms, target_policy, uniform_random_behavior, lr, discount, "BC")
+ir_agent_rooms = IRAgent_FourRooms(2500, env_rooms, target_policy, uniform_random_behavior, lr, discount, "ir")
+bc_agent_rooms = IRAgent_FourRooms(2500, env_rooms, target_policy, uniform_random_behavior, lr, discount, "BC")
 
 
 # choose agent
 true_value = true_value_rooms
 # true_value = true_value_walk
 # agents = [is_agent_walk, wis_minibatch_agent_walk, ir_agent_walk]
-agents = [is_agent_rooms, wis_minibatch_agent_rooms, ir_agent_rooms]
+agents = [is_agent_rooms, wis_minibatch_agent_rooms, ir_agent_rooms, bc_agent_rooms]
 
 n_updates = 500
-n_runs = 5 # cannot increase until we have reset function implemented for agents
+runs = np.random.randint(0,999,5) # cannot increase until we have reset function implemented for agents
 steps_per_update = 16
-colors = ['r','b','k','o','y']
+colors = ['r','b','k','g','y']
 for i in range(len(agents)):
     agent = agents[i]
-    mse_array = np.zeros((n_runs,n_updates+1), dtype=np.float)
-    for run in range(n_runs): # need a reset function for multiple runs, so the model is reinitialized and agent gets new random seed
+    mse_array = np.zeros((len(runs),n_updates+1), dtype=np.float)
+    for run_idx, run in enumerate(runs): # need a reset function for multiple runs, so the model is reinitialized and agent gets new random seed
         agent.reset(run) # run == random seed
         prediction = agent.value_function()
-        mse_array[run,0] = np.mean(np.square(true_value-prediction))
+        mse_array[run_idx,0] = np.mean(np.square(true_value-prediction))
         for j in range(n_updates):
             agent.generate_episode(steps_per_update)
             agent.train_batch(16, 16)
             prediction = agent.value_function()
-            mse_array[run,j+1] = np.mean(np.square(true_value-prediction))
+            mse_array[run_idx,j+1] = np.mean(np.square(true_value-prediction))
     mean = np.mean(mse_array,axis=0)
     std = np.std(mse_array,axis=0)
     plt.figure(1)

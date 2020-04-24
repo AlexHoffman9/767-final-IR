@@ -47,6 +47,19 @@ class IRAgent_FourRooms(OffPolicyAgent_FourRooms):
         # Compile model from loaded
         self.model.compile(loss=ir_loss, optimizer = SGD(lr=self.lr))
 
+    # build neural network for state value function
+    # Default is single layer linear layer
+    def build_model(self, input_dim, out_dim, IS_method):
+        input_layer = Input(shape=(input_dim), name='state_input')
+        ratios = Input(shape=(1), name='importance_ratios')
+        #hidden_layer = Dense(32, activation = "relu", name='hidden_layer')(input_layer)
+        output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer)
+        # output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer) #(hidden_layer)
+        # opt = Adam(lr=self.lr, beta_1=0.9, beta_2=0.999, amsgrad=True)
+        self.model = Model(inputs=[input_layer, ratios], outputs=[output_layer])
+
+        self.model_compile(ratios, IS_method)
+
     # instead of generating one episode of experience, take 16 steps of experience
     def generate_episode(self, k=16):
         # init state
@@ -101,4 +114,4 @@ class IRAgent_FourRooms(OffPolicyAgent_FourRooms):
         targets = (rewards + self.discount*next_values)
 
         # Train on samples
-        return self.model.fit([state_features, ratios], targets, batch_size=batch_size, verbose=0) #, callbacks=[TerminateOnNaN()])
+        self.model.fit([state_features, ratios], targets, batch_size=batch_size, verbose=0) #, callbacks=[TerminateOnNaN()])

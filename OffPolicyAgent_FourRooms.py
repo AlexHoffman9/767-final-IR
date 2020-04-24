@@ -81,15 +81,9 @@ class OffPolicyAgent_FourRooms(OffPolicyAgent):
     def build_model(self, input_dim, out_dim, IS_method):
         input_layer = Input(shape=(input_dim), name='state_input')
         ratios = Input(shape=(1), name='importance_ratios')
-<<<<<<< HEAD
-        # hidden_layer = Dense(32, activation = "relu", name='hidden_layer')(input_layer)
-        # output_layer = Dense(out_dim, activation="linear", name='output_layer')(hidden_layer)
-        output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer) #(hidden_layer)
-=======
         #hidden_layer = Dense(32, activation = "relu", name='hidden_layer')(input_layer)
         output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer)
         # output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer) #(hidden_layer)
->>>>>>> 3905fec935760323176c4f9b24163267b0c5f49f
         # opt = Adam(lr=self.lr, beta_1=0.9, beta_2=0.999, amsgrad=True)
         self.model = Model(inputs=[input_layer, ratios], outputs=[output_layer])
 

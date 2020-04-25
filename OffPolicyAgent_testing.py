@@ -33,8 +33,108 @@ def dynamic_programming_FourRooms(env, discount, target_policy, thresh=.001):
     return v
 
 
+def learning_curve(agents, true_value):
+    n_updates = 1000
+    runs = np.random.randint(0,999,5) 
+    steps_per_update = 16
+    colors = ['r','b','k','g','y']
+    for i in range(len(agents)):
+        agent = agents[i]
+        mave_array = np.zeros((len(runs),n_updates+1), dtype=np.float)
+        for run_idx, run in enumerate(runs):
+            agent.reset(run) # run == random seed
+            prediction = agent.value_function()
+            mave_array[run_idx,0] = np.mean(np.square(true_value-prediction))
+            for j in range(n_updates):
+                agent.generate_episode(steps_per_update)
+                agent.train_batch(16, 16)
+                prediction = agent.value_function()
+                mave_array[run_idx,j+1] = np.mean(np.abs(true_value-prediction))
+        mean = np.mean(mave_array,axis=0)
+        std = np.std(mave_array,axis=0)
+        plt.figure(1)
+        steps = [update*steps_per_update for update in range(n_updates+1)]
+        plt.plot(steps, mean, color=colors[i], label=agent.name)
+        plt.fill_between(steps,mean-std, mean+std, color = colors[i], alpha=.3)
+        plt.legend()
+    plt.axis([0,steps[-1],0,1])
+    plt.xlabel('Training steps')
+    plt.ylabel('MAVE')
+    plt.title('Learning Curve\nlr={},discount={}'.format(lr,discount))
+    plt.show()
+
+
+def learning_rate_sensitivity(agents, true_value):
+    n_updates = 1000
+    # [[0.0, 0.001, 0.01]; collect(0.025:0.025:0.2); collect(0.25:0.05:1.0); collect(1.25:0.25:2.0)]
+    # lrs = [0.01,0.1,0.2,0.5,1.0,2.0,3.0,4.0,6.0,8.0,10.0]
+    lrs = [4.0,4.25,4.5,4.75,5.0,5.25,5.5]
+    runs = np.random.randint(0,999,5) 
+    steps_per_update = 16
+    colors = ['r','b','k','g','y']
+    for i in range(len(agents)):
+        print("agent:",i)
+        agent = agents[i]
+        mave_array = np.zeros((len(runs),len(lrs)), dtype=np.float)
+        for lr_idx in range(len(lrs)):
+            print('lr=',lrs[lr_idx])
+            agent.lr = lrs[lr_idx]
+            for run_idx, run in enumerate(runs):
+                agent.reset(run) # run == random seed
+                for k in range(n_updates):
+                    agent.generate_episode(steps_per_update)
+                    agent.train_batch(16, 16)
+                prediction = agent.value_function()
+                mave_array[run_idx,lr_idx] = np.mean(np.square(true_value-prediction))
+        mean = np.mean(mave_array,axis=0)
+        std = np.std(mave_array,axis=0)
+        plt.figure(1)
+        plt.plot(lrs, mean, color=colors[i], label=agent.name)
+        # plt.fill_between(lrs,mean-std, mean+std, color = colors[i], alpha=.3)
+        plt.legend()
+    plt.axis([0,lrs[-1],0,1])
+    plt.xlabel('Learning Rate')
+    plt.ylabel('MAVE')
+    plt.title('Learning Rate Sensitivity\nlr={},discount={}'.format(lr,discount))
+    plt.show()
+
+def steps_per_update(agent,true_value):
+    n_steps = 1024*16
+    step_sizes = [4,8,16,32,64,128,256,512]
+    n_update_arr = np.floor_divide(n_steps,step_sizes)
+    print(n_update_arr)
+    runs = np.random.randint(0,999,5) 
+    colors = ['r','b','k','g','y']
+    for i in range(len(agents)):
+        print("agent:",i)
+        agent = agents[i]
+        mave_array = np.zeros((len(runs),len(n_update_arr)), dtype=np.float)
+        for update_idx in range(len(n_update_arr)):
+            steps_per_update = step_sizes[update_idx]
+            n_updates = n_update_arr[update_idx]
+            print('steps=',steps_per_update)
+            for run_idx, run in enumerate(runs):
+                agent.reset(run) # run == random seed
+                for k in range(n_updates):
+                    agent.generate_episode(steps_per_update)
+                    agent.train_batch(16, 16)
+                prediction = agent.value_function()
+                mave_array[run_idx,update_idx] = np.mean(np.square(true_value-prediction))
+        mean = np.mean(mave_array,axis=0)
+        std = np.std(mave_array,axis=0)
+        plt.figure(1)
+        plt.plot(np.log2(n_update_arr), mean, color=colors[i], label=agent.name)
+        plt.fill_between(lrs,mean-std, mean+std, color = colors[i], alpha=.3)
+        plt.legend()
+    plt.axis([0,np.log2(n_update_arr[0]),0,1])
+    plt.xlabel('Number of Updates (log2)')
+    plt.ylabel('MAVE')
+    plt.title('Steps per Sensitivity\nlr={},discount={}'.format(lr,discount))
+    plt.show()
+
+
 # test agent
-lr=0.7
+lr=0.07
 discount=.9
 
 # Random walk policies and true value function
@@ -44,9 +144,9 @@ target_policy=np.zeros(shape=(10,2), dtype=np.float)
 for i in range(10):
     target_policy[i,1] = 1.0 # deterministic to right
 true_value_walk = [discount**i for i in reversed(range(10))]
-ir_agent_walk = IRAgent(256, env_walk, target_policy, uniform_random_behavior, lr, discount, 'BC')
-is_agent_walk = OffPolicyAgent(256, env_walk, target_policy, uniform_random_behavior, lr, discount)
-wis_minibatch_agent_walk = OffPolicyAgent(256, env_walk, target_policy, uniform_random_behavior, lr, discount, 'WIS_minibatch')
+ir_agent_walk = IRAgent(1024, env_walk, target_policy, uniform_random_behavior, lr, discount, 'BC')
+is_agent_walk = OffPolicyAgent(1024, env_walk, target_policy, uniform_random_behavior, lr, discount)
+wis_minibatch_agent_walk = OffPolicyAgent(1024, env_walk, target_policy, uniform_random_behavior, lr, discount, 'WIS_minibatch')
 
 # Four Rooms params and agents
 env_rooms = FourRoomsEnv()
@@ -66,40 +166,11 @@ bc_agent_rooms = IRAgent_FourRooms(2500, env_rooms, target_policy, uniform_rando
 
 
 # choose agent
-true_value = true_value_rooms
-# true_value = true_value_walk
-# agents = [is_agent_walk, wis_minibatch_agent_walk, ir_agent_walk]
-agents = [is_agent_rooms, wis_minibatch_agent_rooms, ir_agent_rooms, bc_agent_rooms]
+# true_value = true_value_rooms
+true_value = true_value_walk
+agents = [is_agent_walk, wis_minibatch_agent_walk, ir_agent_walk]
+# agents = [is_agent_rooms, wis_minibatch_agent_rooms, ir_agent_rooms, bc_agent_rooms]
 
-n_updates = 500
-runs = np.random.randint(0,999,5) # cannot increase until we have reset function implemented for agents
-steps_per_update = 16
-colors = ['r','b','k','g','y']
-for i in range(len(agents)):
-    agent = agents[i]
-    mse_array = np.zeros((len(runs),n_updates+1), dtype=np.float)
-    for run_idx, run in enumerate(runs): # need a reset function for multiple runs, so the model is reinitialized and agent gets new random seed
-        agent.reset(run) # run == random seed
-        prediction = agent.value_function()
-        mse_array[run_idx,0] = np.mean(np.square(true_value-prediction))
-        for j in range(n_updates):
-            agent.generate_episode(steps_per_update)
-            agent.train_batch(16, 16)
-            prediction = agent.value_function()
-            mse_array[run_idx,j+1] = np.mean(np.square(true_value-prediction))
-    mean = np.mean(mse_array,axis=0)
-    std = np.std(mse_array,axis=0)
-    plt.figure(1)
-    steps = [update*steps_per_update for update in range(n_updates+1)]
-    plt.plot(steps, mean, color=colors[i], label=agent.name)
-    plt.fill_between(steps,mean-std, mean+std, color = colors[i], alpha=.3) # need to implement multiple runs first
-    plt.legend()
-    plt.axis([0,steps[-1],0,1])
-    plt.xlabel('Training steps')
-    plt.ylabel('MSE')
-plt.title('lr={},discount={}'.format(lr,discount))
-plt.show()
-
-
-# technically the paper used a random walk chain of 8 non terminating states, 2 terminating states, but my code
-# has 10 non-terminating states. can fix later because don't want to break things now
+learning_curve(agents,true_value)
+# learning_rate_sensitivity(agents, true_value)
+# steps_per_update(agents,true_value)

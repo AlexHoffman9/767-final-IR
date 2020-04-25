@@ -5,6 +5,7 @@ from tensorflow.keras.optimizers import Adam,SGD
 from tensorflow.keras.layers import Dense, Input, Activation
 from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import EarlyStopping
+# from tensorflow.keras.initializers import Zeros
 import tensorflow.keras.backend as K
 import matplotlib.pyplot as plt
 from random_walk_env import RandomWalkEnv
@@ -64,7 +65,8 @@ class OffPolicyAgent():
         input_layer = Input(shape=(input_dim), name='state_input')
         ratios = Input(shape=(1), name='importance_ratios')
         # hidden_layer = Dense(32, activation = "relu", name='hidden_layer')(input_layer)
-        output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer) #(hidden_layer)
+        output_layer = Dense(out_dim, activation="linear", name='output_layer')(input_layer)#, kernel_initializer=tf.keras.initializers.Zeros(),
+                #bias_initializer='zeros')(input_layer) #(hidden_layer)
 
         # not sure how to get sum of entire buffer into loss function because it is stored in class
         # def wis_buffer_loss(y_true,y_pred):

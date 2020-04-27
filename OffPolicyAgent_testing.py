@@ -34,8 +34,8 @@ def dynamic_programming_FourRooms(env, discount, target_policy, thresh=.001):
 
 
 def learning_curve(agents, true_value):
-    n_updates = 1000
-    runs = np.random.randint(0,999,5) 
+    n_updates = 5000
+    runs = np.random.randint(0,999,10) 
     steps_per_update = 16
     colors = ['r','b','k','g','y']
     for i in range(len(agents)):
@@ -44,7 +44,7 @@ def learning_curve(agents, true_value):
         for run_idx, run in enumerate(runs):
             agent.reset(run) # run == random seed
             prediction = agent.value_function()
-            mave_array[run_idx,0] = np.mean(np.square(true_value-prediction))
+            mave_array[run_idx,0] = np.mean(np.abs(true_value-prediction))
             for j in range(n_updates):
                 agent.generate_episode(steps_per_update)
                 agent.train_batch(16, 16)
@@ -67,17 +67,16 @@ def learning_curve(agents, true_value):
 def learning_rate_sensitivity(agents, true_value):
     n_updates = 1000
     # [[0.0, 0.001, 0.01]; collect(0.025:0.025:0.2); collect(0.25:0.05:1.0); collect(1.25:0.25:2.0)]
-    # lrs = [0.01,0.1,0.2,0.5,1.0,2.0,3.0,4.0,6.0,8.0,10.0]
-    lrs = [4.0,4.25,4.5,4.75,5.0,5.25,5.5]
-    runs = np.random.randint(0,999,5) 
+    lrs = [0.01]+np.arange(0, 6.1 ,.1)
+    print(lrs)
+    runs = np.random.randint(0,999,25) 
     steps_per_update = 16
     colors = ['r','b','k','g','y']
     for i in range(len(agents)):
-        print("agent:",i)
         agent = agents[i]
         mave_array = np.zeros((len(runs),len(lrs)), dtype=np.float)
         for lr_idx in range(len(lrs)):
-            print('lr=',lrs[lr_idx])
+            print('agent:',agent.name,'lr=',lrs[lr_idx])
             agent.lr = lrs[lr_idx]
             for run_idx, run in enumerate(runs):
                 agent.reset(run) # run == random seed
@@ -85,7 +84,11 @@ def learning_rate_sensitivity(agents, true_value):
                     agent.generate_episode(steps_per_update)
                     agent.train_batch(16, 16)
                 prediction = agent.value_function()
-                mave_array[run_idx,lr_idx] = np.mean(np.square(true_value-prediction))
+                mave_array[run_idx,lr_idx] = np.mean(np.abs(true_value-prediction))
+                if mave_array[run_idx,lr_idx] != mave_array[run_idx,lr_idx]: # nan, diverged
+                    print("diverged")
+                    mave_array[run_idx:,lr_idx] = np.nan # fill rest of array
+                    break
         mean = np.mean(mave_array,axis=0)
         std = np.std(mave_array,axis=0)
         plt.figure(1)
@@ -119,7 +122,7 @@ def steps_per_update(agent,true_value):
                     agent.generate_episode(steps_per_update)
                     agent.train_batch(16, 16)
                 prediction = agent.value_function()
-                mave_array[run_idx,update_idx] = np.mean(np.square(true_value-prediction))
+                mave_array[run_idx,update_idx] = np.mean(np.abs(true_value-prediction))
         mean = np.mean(mave_array,axis=0)
         std = np.std(mave_array,axis=0)
         plt.figure(1)
@@ -134,19 +137,23 @@ def steps_per_update(agent,true_value):
 
 
 # test agent
-lr=0.07
+lr=0.1
 discount=.9
 
 # Random walk policies and true value function
 env_walk = RandomWalkEnv(10)
 uniform_random_behavior=np.full(shape=(10,2), fill_value=0.5, dtype=np.float)
+left_behavior = np.zeros(shape=(10,2), dtype=np.float)
+left_behavior[:,0] = 0.9
+left_behavior[:,1] = 0.1
 target_policy=np.zeros(shape=(10,2), dtype=np.float)
-for i in range(10):
-    target_policy[i,1] = 1.0 # deterministic to right
+target_policy[:,0] = 0.1
+target_policy[:,1] = 0.9
 true_value_walk = [discount**i for i in reversed(range(10))]
-ir_agent_walk = IRAgent(1024, env_walk, target_policy, uniform_random_behavior, lr, discount, 'BC')
-is_agent_walk = OffPolicyAgent(1024, env_walk, target_policy, uniform_random_behavior, lr, discount)
-wis_minibatch_agent_walk = OffPolicyAgent(1024, env_walk, target_policy, uniform_random_behavior, lr, discount, 'WIS_minibatch')
+ir_agent_walk = IRAgent(15000, env_walk, target_policy, left_behavior, lr, discount, 'IR') # best lr ~= 2 diverges after 3
+bc_agent_walk = IRAgent(15000, env_walk, target_policy, left_behavior, lr, discount, 'BC') # best lr = 2 to 4 but diverges after 4
+is_agent_walk = OffPolicyAgent(15000, env_walk, target_policy, left_behavior, lr, discount) # best lr = 0.4, diverges at 1
+wis_minibatch_agent_walk = OffPolicyAgent(15000, env_walk, target_policy, left_behavior, lr, discount, 'WIS_minibatch') # best lr = <1
 
 # Four Rooms params and agents
 env_rooms = FourRoomsEnv()
@@ -161,7 +168,7 @@ target_policy[:,:,2] = 1.0 # deterministically choose down
 true_value_rooms = dynamic_programming_FourRooms(env_rooms, discount, target_policy, .000000000001)
 is_agent_rooms = OffPolicyAgent_FourRooms(2500, env_rooms, target_policy, uniform_random_behavior, lr, discount)
 wis_minibatch_agent_rooms = OffPolicyAgent_FourRooms(2500, env_rooms, target_policy, uniform_random_behavior, lr, discount, 'WIS_minibatch')
-ir_agent_rooms = IRAgent_FourRooms(2500, env_rooms, target_policy, uniform_random_behavior, lr, discount, "ir")
+ir_agent_rooms = IRAgent_FourRooms(2500, env_rooms, target_policy, uniform_random_behavior, lr, discount, "IR")
 bc_agent_rooms = IRAgent_FourRooms(2500, env_rooms, target_policy, uniform_random_behavior, lr, discount, "BC")
 
 
@@ -171,6 +178,10 @@ true_value = true_value_walk
 agents = [is_agent_walk, wis_minibatch_agent_walk, ir_agent_walk]
 # agents = [is_agent_rooms, wis_minibatch_agent_rooms, ir_agent_rooms, bc_agent_rooms]
 
-learning_curve(agents,true_value)
-# learning_rate_sensitivity(agents, true_value)
+# figure 1 final plot:
+
+# find best learning rate for each method
+learning_rate_sensitivity(agents, true_value)
+
+# learning_curve(agents_temp,true_value)
 # steps_per_update(agents,true_value)

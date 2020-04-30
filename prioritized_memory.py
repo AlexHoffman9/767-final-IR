@@ -17,8 +17,12 @@ class Memory:  # stored as ( s, a, r, s_ ) in SumTree
     def _get_priority(self, weight):
         return (np.abs(weight) + self.e) ** self.a
 
-    def add(self, weight, sample):
+    def add_per(self, weight, sample):
         p = self._get_priority(weight)
+        self.tree.add(p, sample)
+
+    def add(self, weight, sample):
+        p = weight + 0.0000001 if weight%10==0 else weight
         self.tree.add(p, sample)
 
     def sample(self, n):
@@ -39,12 +43,12 @@ class Memory:  # stored as ( s, a, r, s_ ) in SumTree
             batch.append(data)
             idxs.append(idx)
 
-        #sampling_probabilities = priorities / self.tree.total()
-        #weights = np.power(self.tree.n_entries * sampling_probabilities, -self.beta)
-        #weights /= weights.max()
+        sampling_probabilities = priorities / self.tree.total()
+        weights = np.power(self.tree.n_entries * sampling_probabilities, -self.beta)
+        weights /= weights.max()
 
 
-        return batch, idxs, priorities, self.tree.total()
+        return batch, idxs, weights, self.tree.total()
 
     def update(self, idx, weight):
         p = self._get_priority(weight)

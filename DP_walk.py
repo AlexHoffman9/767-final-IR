@@ -1,3 +1,5 @@
+import numpy as np
+
 def dynamic_programming_random_walk(env, discount, target_policy, thresh=.001):
     # init values to 0
     v = np.zeros((10,1), dtype=np.float)
@@ -16,7 +18,7 @@ def dynamic_programming_random_walk(env, discount, target_policy, thresh=.001):
                     target = r
                 else:
                     target = r + discount*v[s2]
-                
+
                 vnew += target_policy[s,a]*target
             delta = max(delta, abs(v[s]-vnew))
             v[s] = vnew

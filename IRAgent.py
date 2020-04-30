@@ -1,97 +1,99 @@
 import numpy as np
-import gym
 import tensorflow as tf
-from tensorflow.keras.optimizers import Adam,SGD
-from tensorflow.keras.layers import Dense, Input, Activation
-from tensorflow.keras.models import Model
-from tensorflow.keras.callbacks import EarlyStopping
-import tensorflow.keras.backend as K
-import matplotlib.pyplot as plt
-from random_walk_env import RandomWalkEnv
-import time
+from tensorflow.keras.optimizers import SGD
 from prioritized_memory import Memory
 from TransitionData import TransitionComponent, extract_transition_components
 from OffPolicyAgent import OffPolicyAgent
 
+# Prevent Eager execution from tensorflow
 tf.compat.v1.disable_eager_execution()
 
-# Agent class with defaults for importance sampling
-# can write new classes for WIS, IR, etc. by overwriting key functions
-# Compatible with problem_name='RandomWalk' or 'FourRooms'
+# IMPORTANCE RESAMPLING agent class for Random Walk -
+# derived from Off Policy agent class
 class IRAgent(OffPolicyAgent):
     # construct agent's model separately, so it can be sized according to problem
-    def __init__(self, n_replay, env, target_policy, behavior_policy, lr, discount, IS_method = 'BC'):
-        super().__init__(n_replay, env, target_policy, behavior_policy, lr, discount, IS_method)
-        # IR Replay buffer
-        self.replay_buffer = Memory(n_replay)
+    # Constructor arguments - type == 'BC' indicates Bias correction
+    def __init__(self, n_replay, env, target_policy, behavior_policy, lr, discount, type = 'BC'):
+        super().__init__(n_replay, env, target_policy, behavior_policy, lr, discount, type)
 
     # reseed numpy, reset weights of network
-    def reset(self,seed):
+    # Reset must be performed before every episode
+    def reset(self,seed=0):
+        # Reset time
         self.t=0
+
+        # Set seed value
         np.random.seed(seed)
+
+        # Reset replay buffer
         self.replay_buffer = Memory(self.n_replay)
-        self.model = self.build_model(self.n_features,1,self.name)
 
-    def model_compile(self, model, ratios, IS_method):
-        # IR Agent model loss function
-        def ir_loss(y_true, y_pred):
-            se = tf.math.multiply(tf.math.square(y_true-y_pred), ratios) # weights loss according to sampling ratio. If ratio=0, sample is essentially ignored
-            return tf.math.reduce_mean(se)
+        # Rebuild model
+        self.build_model(self.n_features,1)
 
-        model.compile(loss = ir_loss, optimizer = SGD(lr = self.lr))
+    # Generate steps of experience
+    def generate_experience(self, k=16):
 
-    # complete episode of experience and then train using buffer
-    # not sure how much experience to get before training on it...one episode? 2? n timesteps?
-    def generate_episode(self, k=16):
-        # init state
+        # Initialize environment
         s = self.env.reset()
         done = False
         steps = 0
+
+        # For each step
         while steps < k:
+
             # choose action according to policy
             a = np.random.choice(a=self.actions, p=self.behavior_policy[s])
+
+            # Take a step in environment based on chosen action
             (s2,r,done,_) = self.env.step(a)
+
+            # Compute importance ratios
             ratio = self.target_policy[s,a] / self.behavior_policy[s,a]
 
-            # IR Replay add
+            # Add experience to IR replay buffer
             self.replay_buffer.add(ratio, (s,a,r,s2))
-            #self.replay_buffer[self.t%self.n_replay] = (s,s2,r,ratio)
+
+            # Set for next step
             s=s2
             self.t += 1
             steps += 1
+
+            # If episode ends, reset environment
             if done:
                 done = False
                 s = self.env.reset()
 
-    # do batch of training using replay buffer
-    # Default is to do a minibatch update. The paper uses both minibatch and incremental updates, so this could be changed
-    def train_batch(self, n_samples, batch_size):
+    # Do batch of training using replay buffer
+    def train_batch(self, batch_size):
 
-        # IR Sample
-        data_samples, _, _, buffer_total = self.replay_buffer.sample(n_samples)
+        # Sample a minibatch from replay buffer
+        data_samples, _, _, buffer_total = self.replay_buffer.sample(batch_size)
 
+        # Extract rewards, states, next states from samples
         rewards = extract_transition_components(data_samples, TransitionComponent.reward)
         next_states = extract_transition_components(data_samples, TransitionComponent.next_state)
         next_state_features = self.construct_features(next_states)
         states = extract_transition_components(data_samples, TransitionComponent.state)
         state_features = self.construct_features(states)
-        #print(len(data_samples), len(next_states), n_samples)
 
-        # print(buffer_total)
-
-        # Dummy ratios - Batch Correction
+        # Importance ratios for update equation - IR does not use this
         ratios = np.ones(len(states))
 
+        # In case of Bias Correction, pre-multiply bias corrector to update
         if self.name == "BC":
             ratios = ratios*(buffer_total/self.replay_buffer.tree.n_entries)
 
+        # Get value estimate for next state
         next_values = self.model.predict([next_state_features, np.zeros(next_state_features.shape[0])]).flatten()
+
         # v(s') is zero for terminal state, so need to fix model prediction
-        for i in range(n_samples):
+        for i in range(batch_size):
             # if experience ends in terminal state, value function returns 0
             if next_states[i] == -1 or next_states[i] == 10: #TODO this only works for randomwalk of size 10
                 next_values[i] = 0.0
-        # targets = (rewards + self.discount*next_values)*ratios # this was wrong. the weight update is multiplied by the sampling ratio, not the target
+
+        # Compute targets by bootstrap estimates
         targets = (rewards + self.discount*next_values)
 
         # train on samples

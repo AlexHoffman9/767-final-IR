@@ -9,7 +9,8 @@ class RandomWalkEnv(gym.Env):
   # size = number of states
     # ex: size=10, there are states 0-9, going left at state 0 terminates with r=0, right at state 9 terminates with r=1
   def __init__(self, size):
-    self.action_space = spaces.Discrete(2)
+    self.nA = 2
+    self.action_space = spaces.Discrete(self.nA)
     self.size = size # number of valid states
     #print("init")
   def step(self, action):
